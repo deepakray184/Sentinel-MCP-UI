@@ -1,7 +1,13 @@
-// Microsoft Sentinel MCP SOC Dashboard Frontend Controller
+// Microsoft Sentinel Multi-Collection MCP Hub Frontend Controller
+// Supporting:
+// 1. Data exploration (https://sentinel.microsoft.com/mcp/data-exploration)
+// 2. Security Copilot agent creation (https://sentinel.microsoft.com/mcp/security-copilot-agent-creation)
+// 3. Triage (https://sentinel.microsoft.com/mcp/triage)
 
 let currentIncidentId = 'INC-8042';
+let activeCollection = 'all';
 let allIncidents = [];
+let allTools = [];
 let currentAnalysis = null;
 let wireLogsCache = [];
 
@@ -15,11 +21,23 @@ async function initApp() {
   await fetchStatus();
   await loadIncidents();
   await loadMCPTools();
-  // Automatically trigger initial analysis on the default incident
+  await loadDataLakeTables('');
+  await loadCopilotAgents();
+  // Initial prompt triage
   await runPrompt(`Analyze incident ${currentIncidentId} and summarize root cause, blast radius, and containment actions.`);
 }
 
 function setupEventListeners() {
+  // Collection Tabs in Header
+  document.querySelectorAll('.collection-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.collection-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeCollection = tab.getAttribute('data-collection');
+      onCollectionChanged(activeCollection);
+    });
+  });
+
   // Prompt Form Submission
   const promptForm = document.getElementById('prompt-form');
   promptForm.addEventListener('submit', async (e) => {
@@ -35,7 +53,12 @@ function setupEventListeners() {
   document.querySelectorAll('.starter-chip').forEach(chip => {
     chip.addEventListener('click', () => {
       const prompt = chip.getAttribute('data-prompt');
+      const col = chip.getAttribute('data-col');
       document.getElementById('prompt-input').value = prompt;
+      if (col && col !== activeCollection) {
+        const matchingTab = document.querySelector(`.collection-tab[data-collection="${col}"]`);
+        if (matchingTab) matchingTab.click();
+      }
       runPrompt(prompt);
     });
   });
@@ -49,9 +72,7 @@ function setupEventListeners() {
       btn.classList.add('active');
       const targetTabId = btn.getAttribute('data-tab');
       const targetPane = document.getElementById(targetTabId);
-      if (targetPane) {
-        targetPane.classList.add('active');
-      }
+      if (targetPane) targetPane.classList.add('active');
     });
   });
 
@@ -64,16 +85,12 @@ function setupEventListeners() {
       btn.classList.add('active');
       const targetSubtab = btn.getAttribute('data-subtab');
       const targetPane = document.getElementById(targetSubtab);
-      if (targetPane) {
-        targetPane.classList.add('active');
-      }
+      if (targetPane) targetPane.classList.add('active');
     });
   });
 
   // Search & Severity Filter for Incident List
-  const searchInput = document.getElementById('incident-search');
-  searchInput.addEventListener('input', filterIncidents);
-
+  document.getElementById('incident-search').addEventListener('input', filterIncidents);
   document.querySelectorAll('.severity-pill-group .pill').forEach(pill => {
     pill.addEventListener('click', () => {
       document.querySelectorAll('.severity-pill-group .pill').forEach(p => p.classList.remove('active'));
@@ -82,66 +99,67 @@ function setupEventListeners() {
     });
   });
 
-  // KQL Preset Selector
+  // Tools collection filter in right panel
+  const toolsFilter = document.getElementById('tools-collection-filter');
+  toolsFilter.addEventListener('change', () => {
+    renderToolsList(toolsFilter.value);
+  });
+
+  // Data Lake Table Search
+  document.getElementById('btn-search-tables').addEventListener('click', async () => {
+    const kw = document.getElementById('de-table-search-input').value.trim();
+    await loadDataLakeTables(kw);
+  });
+
+  // Copilot Agent Creator Button
+  document.getElementById('btn-create-copilot-agent').addEventListener('click', async () => {
+    const name = document.getElementById('new-agent-name').value.trim();
+    const prompt = document.getElementById('new-agent-prompt').value.trim();
+    if (!name || !prompt) {
+      showToast('Agent name and workflow prompt required', 'error');
+      return;
+    }
+    await createCopilotAgent(name, prompt);
+  });
+
+  // KQL Preset Selector & Execute
   const kqlPreset = document.getElementById('kql-preset-selector');
   kqlPreset.addEventListener('change', () => {
     document.getElementById('kql-editor-input').value = kqlPreset.value;
   });
-
-  // Execute KQL Button
-  const btnKql = document.getElementById('btn-execute-kql');
-  btnKql.addEventListener('click', executeKqlQuery);
+  document.getElementById('btn-execute-kql').addEventListener('click', executeKqlQuery);
 
   // Clear Wire Logs Button
-  const btnClearLogs = document.getElementById('btn-clear-logs');
-  btnClearLogs.addEventListener('click', () => {
+  document.getElementById('btn-clear-logs').addEventListener('click', () => {
     document.getElementById('wire-terminal').innerHTML = '<div class="subtext">Logs cleared. Waiting for next MCP message...</div>';
   });
 
   // Jump to Wire View from Banner
-  const btnViewWire = document.getElementById('btn-view-wire');
-  btnViewWire.addEventListener('click', () => {
+  document.getElementById('btn-view-wire').addEventListener('click', () => {
     const wireTab = document.querySelector('.subtab-btn[data-subtab="subtab-wire"]');
     if (wireTab) wireTab.click();
   });
 
   // Export Report Button
-  const btnExport = document.getElementById('btn-export-report');
-  btnExport.addEventListener('click', exportIncidentReport);
+  document.getElementById('btn-export-report').addEventListener('click', exportIncidentReport);
 
   // Settings Modal Handlers
-  const btnOpenSettings = document.getElementById('btn-open-settings');
-  const btnCloseModal = document.getElementById('btn-close-modal');
-  const btnCancelSettings = document.getElementById('btn-cancel-settings');
-  const btnSaveSettings = document.getElementById('btn-save-settings');
   const modal = document.getElementById('settings-modal');
-
-  btnOpenSettings.addEventListener('click', () => modal.classList.add('active'));
-  btnCloseModal.addEventListener('click', () => modal.classList.remove('active'));
-  btnCancelSettings.addEventListener('click', () => modal.classList.remove('active'));
-
-  btnSaveSettings.addEventListener('click', async () => {
+  document.getElementById('btn-open-settings').addEventListener('click', () => modal.classList.add('active'));
+  document.getElementById('btn-close-modal').addEventListener('click', () => modal.classList.remove('active'));
+  document.getElementById('btn-cancel-settings').addEventListener('click', () => modal.classList.remove('active'));
+  document.getElementById('btn-save-settings').addEventListener('click', async () => {
     const mode = document.getElementById('config-mode').value;
     const workspace = document.getElementById('config-workspace').value;
     const rg = document.getElementById('config-rg').value;
     const sub = document.getElementById('config-sub').value;
-    const tenant = document.getElementById('config-tenant').value;
-    const client = document.getElementById('config-client').value;
 
     try {
-      const res = await fetch('/api/config', {
+      await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode,
-          azureWorkspaceName: workspace,
-          azureResourceGroup: rg,
-          azureSubscriptionId: sub,
-          azureTenantId: tenant,
-          azureClientId: client
-        })
+        body: JSON.stringify({ mode, azureWorkspaceName: workspace, azureResourceGroup: rg, azureSubscriptionId: sub })
       });
-      const data = await res.json();
       modal.classList.remove('active');
       showToast('Settings saved successfully', 'success');
       await fetchStatus();
@@ -151,7 +169,44 @@ function setupEventListeners() {
   });
 }
 
-// Fetch System Status & Header Info
+function onCollectionChanged(col) {
+  const endpointTag = document.getElementById('active-collection-endpoint');
+  const heading = document.getElementById('prompt-assistant-heading');
+  const icon = document.getElementById('prompt-collection-icon');
+
+  if (col === 'data-exploration') {
+    endpointTag.textContent = 'https://sentinel.microsoft.com/mcp/data-exploration';
+    heading.textContent = 'Data Exploration Assistant (Sentinel Lake)';
+    icon.textContent = '🔍';
+    // Switch to Data Lake tab
+    const tab = document.querySelector('.tab-btn[data-tab="tab-data-exploration"]');
+    if (tab) tab.click();
+  } else if (col === 'security-copilot-agent-creation') {
+    endpointTag.textContent = 'https://sentinel.microsoft.com/mcp/security-copilot-agent-creation';
+    heading.textContent = 'Security Copilot Agent Creation (NL2Agent)';
+    icon.textContent = '🤖';
+    // Switch to Copilot Agent tab
+    const tab = document.querySelector('.tab-btn[data-tab="tab-copilot-agent"]');
+    if (tab) tab.click();
+  } else if (col === 'triage') {
+    endpointTag.textContent = 'https://sentinel.microsoft.com/mcp/triage';
+    heading.textContent = 'Incident Triage & Hunting Assistant';
+    icon.textContent = '🚨';
+    const tab = document.querySelector('.tab-btn[data-tab="tab-narrative"]');
+    if (tab) tab.click();
+  } else {
+    endpointTag.textContent = 'https://sentinel.microsoft.com/mcp/*';
+    heading.textContent = 'Sentinel MCP Multi-Collection Hub';
+    icon.textContent = '🌐';
+  }
+
+  // Also filter right panel tools
+  const toolsFilter = document.getElementById('tools-collection-filter');
+  toolsFilter.value = col;
+  renderToolsList(col);
+}
+
+// Fetch System Status
 async function fetchStatus() {
   try {
     const res = await fetch('/api/status');
@@ -160,49 +215,36 @@ async function fetchStatus() {
     if (data.status === 'connected') {
       statusText.textContent = `MCP CONNECTED (${data.version})`;
       document.getElementById('mcp-status-pill').className = 'mcp-status-pill connected';
-    } else {
-      statusText.textContent = 'MCP CONNECTING...';
-      document.getElementById('mcp-status-pill').className = 'mcp-status-pill';
     }
   } catch (err) {
     console.error('Error fetching status:', err);
   }
 }
 
-// Load Incidents from Sentinel MCP Server
+// Load Incidents (Triage Collection)
 async function loadIncidents() {
   try {
     const res = await fetch('/api/incidents');
     const data = await res.json();
     allIncidents = data.incidents || [];
-
-    // Update telemetry counts
-    document.getElementById('stat-incidents').textContent = allIncidents.length;
-    const critCount = allIncidents.filter(i => i.severity === 'High' || i.severity === 'Critical').length;
-    document.getElementById('stat-critical').textContent = critCount;
     document.getElementById('incident-count-badge').textContent = `${allIncidents.length} Active`;
-
     renderIncidentList(allIncidents);
   } catch (e) {
     console.error('Error loading incidents:', e);
-    document.getElementById('incident-list-container').innerHTML = 
-      `<div class="loading-state text-critical">Failed to load incidents: ${e.message}</div>`;
   }
 }
 
 function renderIncidentList(incidents) {
   const container = document.getElementById('incident-list-container');
   if (!incidents.length) {
-    container.innerHTML = '<div class="loading-state">No incidents matched filter criteria.</div>';
+    container.innerHTML = '<div class="loading-state">No incidents found.</div>';
     return;
   }
 
   container.innerHTML = incidents.map(inc => {
     const sevClass = `sev-${inc.severity.toLowerCase()}`;
     const isActive = inc.id === currentIncidentId ? 'active' : '';
-    const tacticsBadges = (inc.tactics || []).slice(0, 2).map(t => 
-      `<span class="inc-tactic-tag">${t}</span>`
-    ).join('');
+    const tacticsBadges = (inc.tactics || []).slice(0, 2).map(t => `<span class="inc-tactic-tag">${t}</span>`).join('');
 
     return `
       <div class="incident-card ${isActive}" data-id="${inc.id}">
@@ -219,7 +261,6 @@ function renderIncidentList(incidents) {
     `;
   }).join('');
 
-  // Add click handlers
   container.querySelectorAll('.incident-card').forEach(card => {
     card.addEventListener('click', () => {
       const id = card.getAttribute('data-id');
@@ -234,17 +275,10 @@ function filterIncidents() {
   const selectedSev = activeSevPill ? activeSevPill.getAttribute('data-sev') : 'All';
 
   const filtered = allIncidents.filter(inc => {
-    const matchesSearch = inc.id.toLowerCase().includes(query) ||
-                          inc.title.toLowerCase().includes(query) ||
-                          (inc.tactics && inc.tactics.some(t => t.toLowerCase().includes(query)));
-
+    const matchesSearch = inc.id.toLowerCase().includes(query) || inc.title.toLowerCase().includes(query);
     let matchesSev = true;
-    if (selectedSev === 'High') {
-      matchesSev = inc.severity === 'High' || inc.severity === 'Critical';
-    } else if (selectedSev === 'Medium') {
-      matchesSev = inc.severity === 'Medium';
-    }
-
+    if (selectedSev === 'High') matchesSev = inc.severity === 'High' || inc.severity === 'Critical';
+    else if (selectedSev === 'Medium') matchesSev = inc.severity === 'Medium';
     return matchesSearch && matchesSev;
   });
 
@@ -254,17 +288,13 @@ function filterIncidents() {
 function selectIncident(id) {
   currentIncidentId = id;
   document.getElementById('current-incident-tag').textContent = id;
-  
-  // Highlight card
   document.querySelectorAll('.incident-card').forEach(c => {
     c.classList.toggle('active', c.getAttribute('data-id') === id);
   });
-
-  // Run analysis for this incident
-  runPrompt(`Deep analyze incident ${id} and retrieve all correlated entities, alerts, and remediation playbooks.`);
+  runPrompt(`Deep analyze incident ${id} and retrieve correlated entities and alerts.`);
 }
 
-// Execute Natural Language Prompt Analysis via Sentinel MCP Server
+// Execute Prompt
 async function runPrompt(promptText) {
   const btnRun = document.getElementById('btn-run-prompt');
   const originalBtnHtml = btnRun.innerHTML;
@@ -277,16 +307,17 @@ async function runPrompt(promptText) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: promptText,
-        incidentId: currentIncidentId
+        incidentId: currentIncidentId,
+        collection: activeCollection
       })
     });
 
     const data = await res.json();
     currentAnalysis = data;
     renderAnalysisView(data);
-    showToast(`Analysis completed via ${data.executedToolCalls ? data.executedToolCalls.length : 1} MCP tool calls`, 'info');
+    showToast(`Executed via collection: ${data.collection || 'Sentinel MCP'}`, 'info');
   } catch (err) {
-    console.error('Prompt analysis error:', err);
+    console.error('Prompt error:', err);
     showToast('Analysis request failed: ' + err.message, 'error');
   } finally {
     btnRun.innerHTML = originalBtnHtml;
@@ -294,7 +325,6 @@ async function runPrompt(promptText) {
   }
 }
 
-// Render the Rich Analysis View
 function renderAnalysisView(data) {
   if (data.incidentId) {
     currentIncidentId = data.incidentId;
@@ -302,76 +332,53 @@ function renderAnalysisView(data) {
     document.getElementById('banner-id').textContent = data.incidentId;
   }
 
-  // Update Headline Banner
-  if (data.title) {
-    document.getElementById('banner-title').textContent = data.title;
+  if (data.collection) {
+    document.getElementById('banner-collection').textContent = `COLLECTION: ${data.collection.toUpperCase()}`;
   }
+
+  if (data.title) document.getElementById('banner-title').textContent = data.title;
   if (data.severity) {
     const sevBadge = document.getElementById('banner-severity');
     sevBadge.textContent = data.severity.toUpperCase();
     sevBadge.className = `severity-badge sev-${data.severity.toLowerCase()}`;
   }
-  if (data.status) {
-    document.getElementById('banner-status').textContent = data.status.toUpperCase();
-  }
-  if (data.riskScore !== undefined) {
-    document.getElementById('metric-risk-score').textContent = data.riskScore;
-  }
-  if (data.confidenceScore !== undefined) {
-    document.getElementById('metric-confidence').textContent = data.confidenceScore + '%';
-  }
+  if (data.riskScore !== undefined) document.getElementById('metric-risk-score').textContent = data.riskScore;
+  if (data.confidenceScore !== undefined) document.getElementById('metric-confidence').textContent = data.confidenceScore + '%';
 
-  // Tactics Badges
   const tacticsRow = document.getElementById('banner-tactics');
-  const tacticsList = (data.mitre?.tactics) || (data.mitre) || [];
+  const tacticsList = data.mitre?.tactics || [];
   if (Array.isArray(tacticsList)) {
     tacticsRow.innerHTML = tacticsList.map(t => `<span class="tactic-tag">${t}</span>`).join('');
-  } else if (typeof tacticsList === 'object') {
-    tacticsRow.innerHTML = Object.keys(tacticsList).map(t => `<span class="tactic-tag">${t}</span>`).join('');
   }
 
-  // MCP Tool Execution Banner
+  // Tool calls banner
   const toolBanner = document.getElementById('mcp-tool-banner');
   const toolBannerText = document.getElementById('mcp-tool-banner-text');
   if (data.executedToolCalls && data.executedToolCalls.length > 0) {
     toolBanner.style.display = 'flex';
     const toolNames = data.executedToolCalls.map(tc => `<code>${tc.name}</code>`).join(', ');
-    toolBannerText.innerHTML = `Sentinel MCP Server invoked: ${toolNames}`;
+    toolBannerText.innerHTML = `Sentinel MCP invoked: ${toolNames}`;
   } else {
     toolBanner.style.display = 'none';
   }
 
-  // Render Tab 1: Executive Narrative
+  // Render Subtabs
   renderNarrativeTab(data);
-
-  // Render Tab 2: Entities
   renderEntitiesTab(data.entities || []);
-
-  // Render Tab 3: Timeline
   renderTimelineTab(data.attackProgression || []);
-
-  // Render Tab 4: Alerts
   renderAlertsTab(data.alerts || []);
-
-  // Render Tab 6: Playbooks
   renderPlaybooksTab(data.recommendedActions || [], data.incidentId);
 
-  // Update tab counts
   document.getElementById('tab-entities-count').textContent = (data.entities || []).length;
   document.getElementById('tab-alerts-count').textContent = (data.alerts || []).length;
 }
 
 function renderNarrativeTab(data) {
-  const verdictBox = document.getElementById('threat-verdict-box');
   const verdictTitle = document.getElementById('verdict-title');
   const verdictSummary = document.getElementById('verdict-summary');
   
-  if (data.threatVerdict) {
-    verdictTitle.textContent = data.threatVerdict;
-  }
-  if (data.blastRadius) {
-    verdictSummary.textContent = `Blast Radius: ${data.blastRadius} | Risk Score: ${data.riskScore}/100`;
-  }
+  if (data.threatVerdict) verdictTitle.textContent = data.threatVerdict;
+  if (data.blastRadius) verdictSummary.textContent = `Blast Radius: ${data.blastRadius} | Risk Score: ${data.riskScore}/100`;
 
   const container = document.getElementById('narrative-content');
   const md = data.narrativeMarkdown || data.summary || 'No narrative generated.';
@@ -381,7 +388,7 @@ function renderNarrativeTab(data) {
 function renderEntitiesTab(entities) {
   const tbody = document.getElementById('entities-table-body');
   if (!entities.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="subtext">No entities extracted for this incident.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="subtext">No entities extracted.</td></tr>';
     return;
   }
 
@@ -399,13 +406,12 @@ function renderEntitiesTab(entities) {
       actionBtn = `<button class="btn btn-secondary btn-sm" onclick="showToast('Entity marked for review: ${name}', 'info')">Review</button>`;
     }
 
-    let riskBadge = '<span class="severity-badge sev-medium">Medium</span>';
     const risk = entity.properties?.riskLevel || entity.properties?.threatScore || 'Medium';
-    if (risk === 'High' || risk > 80) {
-      riskBadge = `<span class="severity-badge sev-critical">Risk ${risk}</span>`;
-    }
+    const riskBadge = (risk === 'High' || risk > 80) ? 
+      `<span class="severity-badge sev-critical">Risk ${risk}</span>` : 
+      `<span class="severity-badge sev-medium">Medium</span>`;
 
-    const context = entity.properties?.threatReputation || entity.properties?.osVersion || entity.properties?.role || 'Verified identity / system asset';
+    const context = entity.properties?.threatReputation || entity.properties?.osVersion || 'Verified security asset';
 
     return `
       <tr>
@@ -488,31 +494,112 @@ function renderPlaybooksTab(playbooks, incidentId) {
   `).join('');
 }
 
-// Direct Playbook Invocation via MCP trigger_playbook Tool
+// Data Lake Tables (Data exploration collection)
+async function loadDataLakeTables(keyword = '') {
+  try {
+    const res = await fetch('/api/tables/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyword })
+    });
+    const data = await res.json();
+    const container = document.getElementById('data-lake-tables-container');
+    const tables = data.tables || [];
+
+    if (!tables.length) {
+      container.innerHTML = '<div class="subtext">No tables matched keyword.</div>';
+      return;
+    }
+
+    container.innerHTML = tables.map(t => `
+      <div class="table-card">
+        <div>
+          <div class="table-name">${t.name}</div>
+          <div class="table-category">${t.category}</div>
+          <div class="table-desc">${t.description}</div>
+          <div class="columns-preview">
+            ${(t.columns || []).map(c => `<span class="column-tag">${c.name}</span>`).join('')}
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="loadKqlQuery('${escapeHtml(t.sampleQuery)}')">
+          Load Sample KQL
+        </button>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('Failed to load tables:', e);
+  }
+}
+
+function loadKqlQuery(query) {
+  document.getElementById('kql-editor-input').value = query;
+  const kqlTab = document.querySelector('.tab-btn[data-tab="tab-kql"]');
+  if (kqlTab) kqlTab.click();
+}
+
+// Copilot Agent Builder (Security Copilot agent creation collection)
+async function loadCopilotAgents() {
+  try {
+    const res = await fetch('/api/agent/list');
+    const data = await res.json();
+    const container = document.getElementById('copilot-agents-container');
+    const agents = data.agents || [];
+
+    container.innerHTML = agents.map(a => `
+      <div class="copilot-agent-card">
+        <div class="agent-title-row">
+          <span class="agent-name-text">${escapeHtml(a.name)}</span>
+          <span class="agent-status-badge">${a.status}</span>
+        </div>
+        <div class="agent-desc-text">${escapeHtml(a.description)}</div>
+        <div class="subtext" style="color:#c084fc;font-family:var(--font-mono);font-size:0.72rem;">
+          Skills: ${(a.capabilities || []).join(', ')}
+        </div>
+        <pre class="agent-yaml-code">${escapeHtml(a.yamlSpec || '')}</pre>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('Failed to load copilot agents:', e);
+  }
+}
+
+async function createCopilotAgent(agentName, workflowPrompt) {
+  try {
+    showToast(`Creating Security Copilot agent '${agentName}' via MCP...`, 'info');
+    const res = await fetch('/api/agent/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName, workflowPrompt })
+    });
+    const data = await res.json();
+    showToast(`Agent created successfully!`, 'success');
+    await loadCopilotAgents();
+  } catch (e) {
+    showToast('Failed to create agent: ' + e.message, 'error');
+  }
+}
+
+// Playbook trigger
 async function triggerDirectPlaybook(playbookId, target) {
   try {
     showToast(`Triggering SOAR playbook ${playbookId} on ${target}...`, 'info');
     const res = await fetch('/api/playbook/trigger', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        playbookId,
-        targetEntity: target,
-        incidentId: currentIncidentId
-      })
+      body: JSON.stringify({ playbookId, targetEntity: target, incidentId: currentIncidentId })
     });
     const data = await res.json();
-    showToast(`Playbook executed successfully! Execution ID: ${data.result?.executionId || 'OK'}`, 'success');
+    showToast(`Playbook executed! ID: ${data.result?.executionId || 'OK'}`, 'success');
   } catch (e) {
     showToast('Failed to trigger playbook: ' + e.message, 'error');
   }
 }
 
-// Execute KQL Query via MCP run_kql_query Tool
+// Execute KQL
 async function executeKqlQuery() {
   const query = document.getElementById('kql-editor-input').value.trim();
   const resultsContainer = document.getElementById('kql-results-container');
-  resultsContainer.innerHTML = '<div class="loading-state"><div class="cyber-spinner"></div><p>Executing KQL via Sentinel MCP...</p></div>';
+  resultsContainer.innerHTML = '<div class="loading-state"><div class="cyber-spinner"></div><p>Executing KQL via query_lake...</p></div>';
 
   try {
     const res = await fetch('/api/kql', {
@@ -524,108 +611,102 @@ async function executeKqlQuery() {
     
     if (data.results && data.results.length > 0) {
       const keys = Object.keys(data.results[0]);
-      let tableHtml = `
-        <div style="margin-bottom:8px;color:#34d399;">Table: ${data.table} &bull; Returned ${data.rowCount} rows</div>
+      resultsContainer.innerHTML = `
+        <div style="margin-bottom:8px;color:#34d399;">Table: ${data.resolvedTable} &bull; Returned ${data.rowCount} rows</div>
         <table class="cyber-table" style="font-size:0.75rem;">
           <thead>
             <tr>${keys.map(k => `<th>${escapeHtml(k)}</th>`).join('')}</tr>
           </thead>
           <tbody>
-            ${data.results.map(row => `
-              <tr>${keys.map(k => `<td>${escapeHtml(String(row[k] || ''))}</td>`).join('')}</tr>
-            `).join('')}
+            ${data.results.map(row => `<tr>${keys.map(k => `<td>${escapeHtml(String(row[k] || ''))}</td>`).join('')}</tr>`).join('')}
           </tbody>
         </table>
       `;
-      resultsContainer.innerHTML = tableHtml;
     } else {
-      resultsContainer.innerHTML = `<div class="subtext">Query executed successfully. 0 records returned.</div><pre style="color:#94a3b8;margin-top:8px;">${JSON.stringify(data, null, 2)}</pre>`;
+      resultsContainer.innerHTML = `<div class="subtext">0 records returned.</div><pre style="color:#94a3b8;margin-top:8px;">${JSON.stringify(data, null, 2)}</pre>`;
     }
   } catch (err) {
-    resultsContainer.innerHTML = `<div class="text-critical">KQL execution error: ${err.message}</div>`;
+    resultsContainer.innerHTML = `<div class="text-critical">KQL error: ${err.message}</div>`;
   }
 }
 
-// Load Exposed MCP Tools into Right Panel
+// MCP Tools Catalog
 async function loadMCPTools() {
   try {
     const res = await fetch('/api/mcp/tools');
     const data = await res.json();
-    const container = document.getElementById('tools-list-container');
-    const tools = data.tools || [];
-    
-    container.innerHTML = tools.map(tool => `
-      <div class="tool-card">
-        <div class="tool-name">${tool.name}</div>
-        <div class="tool-desc">${escapeHtml(tool.description)}</div>
-      </div>
-    `).join('');
+    allTools = data.tools || [];
+    document.getElementById('tools-badge-count').textContent = allTools.length;
+    renderToolsList('all');
   } catch (e) {
-    console.error('Failed to load MCP tools list:', e);
+    console.error('Failed to load MCP tools:', e);
   }
 }
 
-// Poll & Stream Live JSON-RPC 2.0 Wire Logs
+function renderToolsList(colFilter = 'all') {
+  const container = document.getElementById('tools-list-container');
+  let tools = allTools;
+  if (colFilter !== 'all') {
+    tools = allTools.filter(t => t.collection === colFilter);
+  }
+
+  container.innerHTML = tools.map(tool => `
+    <div class="tool-card">
+      <div class="tool-name">${tool.name}</div>
+      <div class="tool-collection-tag">${tool.collectionUrl || tool.collection}</div>
+      <div class="tool-desc">${escapeHtml(tool.description)}</div>
+    </div>
+  `).join('');
+}
+
+// Wire logs stream
 function startWirePolling() {
   setInterval(async () => {
     try {
       const res = await fetch('/api/mcp/logs');
       const data = await res.json();
       const logs = data.logs || [];
-      
       if (logs.length !== wireLogsCache.length) {
         wireLogsCache = logs;
         renderWireLogs(logs);
       }
-    } catch (e) {
-      // Ignore polling errors
-    }
+    } catch (e) {}
   }, 1200);
 }
 
 function renderWireLogs(logs) {
   const container = document.getElementById('wire-terminal');
-  if (!logs.length) {
-    container.innerHTML = '<div class="subtext">Waiting for MCP JSON-RPC protocol traffic...</div>';
-    return;
-  }
+  if (!logs.length) return;
 
-  // Render recent logs (newest at bottom)
   container.innerHTML = logs.slice(-25).map(log => {
     const isOut = log.direction === 'outgoing';
     const arrow = isOut ? '&rarr; Client Request' : '&larr; Server Response';
-    const jsonStr = escapeHtml(JSON.stringify(log.data, null, 2));
-
     return `
       <div class="wire-entry ${log.direction}">
         <div class="wire-entry-header">
           <span class="wire-direction">${arrow}</span>
           <span class="wire-time">${formatTime(log.timestamp)}</span>
         </div>
-        <pre class="wire-json">${jsonStr}</pre>
+        <pre class="wire-json">${escapeHtml(JSON.stringify(log.data, null, 2))}</pre>
       </div>
     `;
   }).join('');
-
-  // Auto-scroll to bottom
   container.scrollTop = container.scrollHeight;
 }
 
-// Export Incident Report as Markdown
+// Export Report
 function exportIncidentReport() {
   if (!currentAnalysis) {
     showToast('No active incident analysis to export.', 'error');
     return;
   }
-
   const filename = `Sentinel-Analysis-${currentIncidentId}.md`;
   const reportContent = `# Microsoft Sentinel Incident Analysis Report
 **Incident ID:** ${currentIncidentId}
+**Collection:** ${currentAnalysis.collection || 'Triage'} (${currentAnalysis.collectionUrl || 'https://sentinel.microsoft.com/mcp'})
 **Title:** ${currentAnalysis.title || 'Security Incident'}
 **Severity:** ${currentAnalysis.severity || 'High'}
-**Status:** ${currentAnalysis.status || 'Active'}
 **Generated:** ${new Date().toISOString()}
-**Protocol Source:** Microsoft Sentinel Model Context Protocol (MCP) Server
 
 ---
 
@@ -636,20 +717,12 @@ ${currentAnalysis.narrativeMarkdown || ''}
 ---
 
 ## 2. Indicators of Compromise (IoCs) & Entities
-${(currentAnalysis.entities || []).map(e => `- **[${e.type}]** ${e.name} (Risk: ${e.properties?.riskLevel || e.properties?.threatScore || 'Identified'})`).join('\n')}
+${(currentAnalysis.entities || []).map(e => `- **[${e.type}]** ${e.name}`).join('\n')}
 
 ---
 
 ## 3. Correlated Sentinel Security Alerts
-${(currentAnalysis.alerts || []).map(a => `- **${a.alertDisplayName}** [${a.severity}] (Provider: ${a.provider})`).join('\n')}
-
----
-
-## 4. Remediation & Containment Actions Executed
-${(currentAnalysis.recommendedActions || []).map(pb => `- **${pb.action}** -> Target: \`${pb.target}\` (${pb.currentStatus || 'Actionable'})`).join('\n')}
-
----
-*Report generated automatically via Microsoft Sentinel MCP Agent GUI.*
+${(currentAnalysis.alerts || []).map(a => `- **${a.alertDisplayName}** [${a.severity}]`).join('\n')}
 `;
 
   const blob = new Blob([reportContent], { type: 'text/markdown;charset=utf-8;' });
@@ -664,53 +737,33 @@ ${(currentAnalysis.recommendedActions || []).map(pb => `- **${pb.action}** -> Ta
   showToast(`Exported ${filename}`, 'success');
 }
 
-// Toast Notifications
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
   toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
   container.appendChild(toast);
-  setTimeout(() => {
-    toast.remove();
-  }, 4000);
+  setTimeout(() => toast.remove(), 4000);
 }
 
-// Simple Markdown to HTML Helper
 function parseMarkdownToHtml(md) {
   if (!md) return '';
   let html = escapeHtml(md);
-
-  // Headers
   html = html.replace(/^### (.*$)/gim, '<h4>$1</h4>');
   html = html.replace(/^## (.*$)/gim, '<h3>$1</h3>');
   html = html.replace(/^# (.*$)/gim, '<h2>$1</h2>');
-
-  // Bold & Italic
   html = html.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
   html = html.replace(/\*(.*?)\*/gim, '<em>$1</em>');
-
-  // Inline Code
   html = html.replace(/`([^`]+)`/gim, '<code>$1</code>');
-
-  // Lists
   html = html.replace(/^\- (.*$)/gim, '<li>$1</li>');
   html = html.replace(/(<li>.*<\/li>)/gim, '<ul>$1</ul>');
-
-  // Line breaks
   html = html.replace(/\n\n/gim, '<br><br>');
-
   return html;
 }
 
 function escapeHtml(str) {
   if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
 function formatTime(isoStr) {

@@ -1,32 +1,51 @@
-# 🛡️ Microsoft Sentinel MCP Incident Analysis & SOC GUI
+# 🛡️ Microsoft Sentinel MCP Multi-Collection SOC Hub
 
-A Security Operations Center (SOC) web application that connects to a **Microsoft Sentinel Model Context Protocol (MCP)** server to perform deep incident analysis, threat hunting, and automated containment response via natural language prompts.
+A Security Operations Center (SOC) web application that connects to the **3 official Microsoft Sentinel Model Context Protocol (MCP)** tool collections to explore security data, triage incidents, and build Microsoft Security Copilot agents via natural language prompts.
 
-![Microsoft Sentinel MCP](https://img.shields.io/badge/Sentinel-MCP%202024--11--05-0078D4?style=flat-square&logo=microsoftazure)
-![Node.js](https://img.shields.io/badge/Runtime-Node.js%2020%2B-339933?style=flat-square&logo=node.js)
+![Microsoft Sentinel Multi-Collection](https://img.shields.io/badge/Sentinel-MCP%203--in--1-0078D4?style=flat-square&logo=microsoftazure)
+![MCP Collections](https://img.shields.io/badge/Collections-Data%20Exploration%20|%20Agent%20Creation%20|%20Triage-8B5CF6?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Active%20SOC%20Hub-10B981?style=flat-square)
 
 ---
 
-## ⚡ Core Features
+## 🏛️ Supported Microsoft Sentinel MCP Collections
 
-- **Model Context Protocol (MCP 2024-11-05)**: Full JSON-RPC 2.0 stdio server providing standard tools, resources, and prompt templates for Microsoft Sentinel.
-- **Natural Language Incident Prompt Assistant**: Prompt the Sentinel MCP Agent in plain English (e.g. *"Analyze incident INC-8042: What was the root cause and how do we contain it?"*, *"Investigate compromised user sarah.jenkins"*, *"Run KQL query looking for powershell executions"*).
-- **Automated SOC Triage & Root Cause Analysis**: Correlates alerts, extracts affected entities (Accounts, Hosts, Malicious IPs, Hashes), calculates blast radius and risk scores, and reconstructs the full kill-chain attack progression.
-- **MITRE ATT&CK Matrix Alignment**: Visualizes tactics (Initial Access, Execution, Persistence, Defense Evasion, Lateral Movement, Impact) and techniques.
-- **Live MCP Wire Protocol Inspector**: Real-time terminal displaying every raw JSON-RPC message exchanged between the web client and the Sentinel MCP server (`tools/list`, `tools/call`, `initialize`).
-- **Interactive KQL Query Runner**: Execute custom Kusto Query Language queries via the MCP `run_kql_query` tool against Sentinel Log Analytics tables (`SecurityAlert`, `DeviceProcessEvents`, `SigninLogs`, `DeviceNetworkEvents`).
-- **One-Click SOAR Playbook Execution**: Trigger containment actions directly from the GUI via `trigger_playbook` (e.g., *Isolate Host*, *Revoke Entra ID Sessions*, *Block Malicious IP at Azure Firewall*).
-- **Dual Mode Support**:
-  - **Emulated High-Fidelity Mode**: Pre-loaded with 5 multi-stage enterprise attack scenarios (Ransomware, Impossible Travel, CI/CD Supply Chain, Data Exfiltration, Kerberoasting) requiring zero cloud setup.
-  - **Live Azure Sentinel Mode**: Plug in your Azure Tenant ID, Client ID, Client Secret, and Log Analytics Workspace to interact with real production Sentinel workspaces via Azure Resource Manager REST API.
-- **One-Click Report Export**: Download comprehensive incident investigation reports in Markdown (`.md`) format.
+As documented in [Microsoft Sentinel MCP Tools Overview](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-tools-overview#available-collections), this project incorporates all 3 official scenario collections:
+
+| Collection | Description | Server Endpoint URL | Key Tools Included |
+|---|---|---|---|
+| **[Data exploration](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-data-exploration-tool)** | Explore security data in Microsoft Sentinel data lake by searching for relevant tables, querying the lake, and analyzing entities | `https://sentinel.microsoft.com/mcp/data-exploration` | `search_tables`, `query_lake`, `list_sentinel_workspaces`, `analyze_user_entity`, `analyze_url_entity`, `get_data_graph` |
+| **[Security Copilot agent creation](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-agent-creation-tool)** | Create Microsoft Security Copilot agents for complex workflows | `https://sentinel.microsoft.com/mcp/security-copilot-agent-creation` | `search_for_tools`, `create_security_copilot_agent`, `generate_agent_yaml`, `list_copilot_agents`, `deploy_copilot_agent` |
+| **[Triage](https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-triage-tool)** | Triage incidents rapidly and hunt over your own data easily | `https://sentinel.microsoft.com/mcp/triage` | `ListIncidents`, `GetIncidentById`, `ListAlerts`, `GetAlertByID`, `RunAdvancedHuntingQuery`, `GetDefenderMachine`, `GetDefenderFileInfo`, `GetDefenderIpAlerts`, `ListDefenderIndicators`, `analyze_incident`, `trigger_playbook` |
+
+---
+
+## ⚡ Core Capabilities
+
+1. **Multi-Collection Prompt Assistant**:
+   - Prompt in natural language across all 3 collections simultaneously or filter by collection.
+   - Automatically determines whether your prompt is for incident triage, data lake table exploration, entity analysis, or Security Copilot agent synthesis.
+
+2. **Data Exploration**:
+   - **Semantic Table Discovery (`search_tables`)**: Search through Sentinel data lake schemas and tables (e.g. `SecurityAlert`, `DeviceProcessEvents`, `SigninLogs`, `DeviceNetworkEvents`, `AADRiskyUsers`, `AzureActivity`).
+   - **Entity Analyzers (`analyze_user_entity`, `analyze_url_entity`)**: Evaluate users (risk score, anomalies, department context) and URLs (threat intel feeds, reverse proxy detection, SSL certificate age).
+   - **Data Lake KQL Query Runner (`query_lake`)**: Run interactive KQL queries against the lake.
+
+3. **Security Copilot Agent Creation (NL2Agent)**:
+   - Provide a natural language description (e.g. *"Create an agent that generates a post-incident report from Defender, Purview, and Sentinel"*).
+   - MCP tools search for required capabilities (`search_for_tools`), equip the agent with matching skills, and generate the deployable **YAML Agent Manifest**.
+
+4. **Incident Triage & Threat Hunting**:
+   - Full kill-chain reconstruction, MITRE ATT&CK matrix alignment, Defender machine and file intelligence lookups (`GetDefenderMachine`, `GetDefenderFileInfo`), and one-click SOAR playbooks (`trigger_playbook`).
+
+5. **Real-Time MCP Wire Protocol Inspector**:
+   - Live stream of JSON-RPC 2.0 messages sent and received by the Sentinel MCP Server.
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Launch the SOC Web Application
+### 1. Start the Application
 ```bash
 npm start
 ```
@@ -35,37 +54,33 @@ Or run directly:
 node server/web_server.js
 ```
 
-### 2. Open the GUI Dashboard
+### 2. Open the SOC Command Center
 Navigate to **`http://localhost:3333`** in your browser.
 
 ---
 
-## 🛠️ Sentinel MCP Server Tools
+## 💡 Example Prompts to Try
 
-The Sentinel MCP server (`mcp/sentinel_mcp_server.js`) exposes the following tools:
-
-| MCP Tool Name | Description | Key Parameters |
-|---|---|---|
-| `list_incidents` | Lists active security incidents from Sentinel | `severity`, `status`, `limit` |
-| `get_incident_details` | Retrieves full metadata and description for an incident | `incidentId` |
-| `get_incident_entities` | Extracts correlated accounts, hosts, IPs, and hashes | `incidentId` |
-| `get_incident_alerts` | Retrieves alerts grouped under the incident | `incidentId` |
-| `analyze_incident` | Performs automated SOC triage, blast radius & risk score analysis | `incidentId`, `focusArea` |
-| `run_kql_query` | Executes KQL queries against Log Analytics workspace | `query`, `timespan` |
-| `trigger_playbook` | Triggers automated containment playbooks (SOAR) | `playbookId`, `targetEntity` |
-| `update_incident_status` | Updates incident status, severity, and comments | `incidentId`, `status`, `comment` |
-| `get_mitre_mapping` | Returns MITRE ATT&CK matrix mapping for incidents | `incidentId` |
+* **Triage**:
+  > *"Analyze incident INC-8042: root cause, affected entities, and containment steps"*
+  > *"Get Defender machine telemetry for SRV-FIN-SQL01 and check network isolation"*
+* **Data Exploration**:
+  > *"Search Sentinel data lake tables for authentication, process creation, and network events"*
+  > *"Analyze user entity sarah.jenkins@contoso.com and show risk score and anomalies"*
+* **Agent Creation**:
+  > *"Create an agent that generates a comprehensive post-incident report from Defender, Purview, and Sentinel"*
+  > *"Build a Security Copilot agent that monitors ransomware alerts and auto-isolates infected machines"*
 
 ---
 
-## 🔌 Connecting to Claude Desktop / Antigravity / Cursor
+## 🔌 Using with Claude Desktop / Antigravity / Cursor
 
-To use this Sentinel MCP Server with **Claude Desktop**, add it to your `claude_desktop_config.json`:
+Add the Sentinel MCP Server to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "microsoft-sentinel": {
+    "microsoft-sentinel-hub": {
       "command": "node",
       "args": [
         "/Users/deepak/Documents/Sentinel-MCP-UI/mcp/sentinel_mcp_server.js"
@@ -74,44 +89,3 @@ To use this Sentinel MCP Server with **Claude Desktop**, add it to your `claude_
   }
 }
 ```
-
----
-
-## 📂 Project Architecture
-
-```
-Sentinel-MCP-UI/
-├── package.json                    # Project configuration and launch scripts
-├── mcp/
-│   ├── sentinel_mcp_server.js      # Stdio MCP Server (JSON-RPC 2.0 protocol)
-│   ├── mock_sentinel_data.js       # Pre-loaded multi-stage threat scenarios
-│   └── azure_sentinel_client.js    # Live Azure REST API integration client
-├── server/
-│   ├── mcp_client.js               # MCP Client managing stdio child process
-│   ├── prompt_orchestrator.js      # AI SOC Agent translating prompts into MCP tools
-│   └── web_server.js               # HTTP API server & static asset host (Port 3333)
-├── public/
-│   ├── index.html                  # Cyber SOC command center layout
-│   ├── styles.css                  # Futuristic dark cyber SOC styling
-│   └── app.js                      # Frontend reactive controller & wire inspector
-└── README.md                       # Documentation & usage guide
-```
-
----
-
-## 🛡️ Example Prompts to Try in the GUI
-
-1. **Deep Triage**:
-   > *"Analyze incident INC-8042: What was the root cause, what endpoints are affected, and what containment steps are needed?"*
-
-2. **Entity Investigation**:
-   > *"Investigate compromised user sarah.jenkins@contoso.com and check for impossible travel or token replay."*
-
-3. **Threat Hunting**:
-   > *"Run a KQL query on DeviceProcessEvents looking for vssadmin and powershell execution."*
-
-4. **Containment**:
-   > *"Execute containment playbook PB-ISOLATE-HOST on SRV-FIN-SQL01."*
-
-5. **Threat Matrix**:
-   > *"Show all MITRE ATT&CK tactics involved across the current incidents."*

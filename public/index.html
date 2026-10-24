@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Microsoft Sentinel MCP Incident Command Center</title>
+  <title>Microsoft Sentinel MCP Multi-Collection Hub</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,41 +20,38 @@
         </div>
         <div class="brand-text">
           <div class="brand-title">
-            <span class="azure-blue">Microsoft</span> Sentinel <span class="mcp-badge">MCP</span>
+            <span class="azure-blue">Microsoft</span> Sentinel <span class="mcp-badge">MCP 3-in-1</span>
           </div>
-          <div class="brand-subtitle">AI SOC Autonomous Incident Analysis & Response Hub</div>
+          <div class="brand-subtitle">Data Exploration &bull; Security Copilot Agent Creation &bull; Triage</div>
         </div>
       </div>
     </div>
 
-    <!-- Center SOC Telemetry Stats -->
-    <div class="soc-telemetry-bar">
-      <div class="telemetry-item">
-        <span class="telemetry-label">Active Incidents</span>
-        <span class="telemetry-value" id="stat-incidents">5</span>
-      </div>
-      <div class="telemetry-divider"></div>
-      <div class="telemetry-item">
-        <span class="telemetry-label">Critical Severity</span>
-        <span class="telemetry-value text-critical" id="stat-critical">2</span>
-      </div>
-      <div class="telemetry-divider"></div>
-      <div class="telemetry-item">
-        <span class="telemetry-label">Entities at Risk</span>
-        <span class="telemetry-value text-amber" id="stat-entities">18</span>
-      </div>
-      <div class="telemetry-divider"></div>
-      <div class="telemetry-item">
-        <span class="telemetry-label">SOAR Playbooks</span>
-        <span class="telemetry-value text-cyan" id="stat-playbooks">4 Ready</span>
-      </div>
+    <!-- Active MCP Collections Selector Tabs -->
+    <div class="collections-selector-bar">
+      <button class="collection-tab active" data-collection="all" title="Unified Multi-Collection Hub">
+        <span class="coll-icon">🌐</span>
+        <span class="coll-label">All Collections</span>
+      </button>
+      <button class="collection-tab" data-collection="triage" title="https://sentinel.microsoft.com/mcp/triage">
+        <span class="coll-icon">🚨</span>
+        <span class="coll-label">Triage</span>
+      </button>
+      <button class="collection-tab" data-collection="data-exploration" title="https://sentinel.microsoft.com/mcp/data-exploration">
+        <span class="coll-icon">🔍</span>
+        <span class="coll-label">Data Exploration</span>
+      </button>
+      <button class="collection-tab" data-collection="security-copilot-agent-creation" title="https://sentinel.microsoft.com/mcp/security-copilot-agent-creation">
+        <span class="coll-icon">🤖</span>
+        <span class="coll-label">Agent Creation</span>
+      </button>
     </div>
 
     <!-- Right Controls -->
     <div class="nav-right">
       <div class="mcp-status-pill connected" id="mcp-status-pill">
         <span class="status-dot"></span>
-        <span class="status-text" id="mcp-status-text">MCP CONNECTED (v1.2.0)</span>
+        <span class="status-text" id="mcp-status-text">MCP CONNECTED (v2.0.0)</span>
       </div>
       <button class="btn btn-secondary btn-sm" id="btn-open-settings" title="Sentinel & Azure Workspace Settings">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -74,7 +71,7 @@
     <aside class="sidebar-incidents">
       <div class="sidebar-header">
         <div class="sidebar-title-row">
-          <h3>Sentinel Incidents</h3>
+          <h3 id="sidebar-context-title">Sentinel Incidents</h3>
           <span class="badge badge-subtle" id="incident-count-badge">5 Active</span>
         </div>
         <div class="filter-controls">
@@ -100,13 +97,13 @@
     <!-- CENTER COLUMN: Interactive Natural Language Prompt & Deep Incident Analysis -->
     <section class="main-analysis-viewport">
       
-      <!-- Top Natural Language Prompt & Investigation Bar -->
+      <!-- Top Natural Language Prompt Bar -->
       <div class="prompt-section-card">
         <div class="prompt-header">
           <div class="prompt-title-row">
-            <span class="prompt-icon">🤖</span>
-            <h4>Sentinel MCP Incident Assistant</h4>
-            <span class="model-tag">Model Context Protocol Client</span>
+            <span class="prompt-icon" id="prompt-collection-icon">🤖</span>
+            <h4 id="prompt-assistant-heading">Sentinel MCP Assistant (Multi-Collection)</h4>
+            <span class="model-tag" id="active-collection-endpoint">https://sentinel.microsoft.com/mcp/*</span>
           </div>
           <div class="active-incident-pill" id="active-incident-pill">
             Target: <strong id="current-incident-tag">INC-8042</strong>
@@ -117,7 +114,7 @@
           <textarea 
             id="prompt-input" 
             rows="2" 
-            placeholder="Ask anything about the incident... e.g. 'Analyze INC-8042: What was the initial access and how to contain it?', 'Show affected accounts', 'Run KQL query for powershell'"
+            placeholder="Ask anything across Triage, Data Exploration, or Agent Creation... e.g. 'Analyze INC-8042', 'Search tables for sign-in logs', 'Create a Security Copilot agent that generates post-incident reports'"
             required></textarea>
           <div class="prompt-actions">
             <button type="submit" class="btn btn-cyber" id="btn-run-prompt">
@@ -128,33 +125,31 @@
         </form>
 
         <!-- Prompt Quick Starters -->
-        <div class="prompt-quick-starters">
+        <div class="prompt-quick-starters" id="quick-starters-container">
           <span class="starters-label">Quick Prompts:</span>
-          <button class="starter-chip" data-prompt="Analyze incident INC-8042 and provide full root cause, blast radius, and containment plan">⚡ Deep Triage INC-8042</button>
-          <button class="starter-chip" data-prompt="Investigate impossible travel alert on sarah.jenkins@contoso.com and check for token hijacking">🔍 Investigate Impossible Travel</button>
-          <button class="starter-chip" data-prompt="Show all compromised entities and recommend immediate containment playbooks">🛡️ Entities & Containment</button>
-          <button class="starter-chip" data-prompt="Run KQL hunting query on DeviceProcessEvents looking for vssadmin and powershell execution">🧪 KQL Process Hunt</button>
-          <button class="starter-chip" data-prompt="Map incident attack techniques to the MITRE ATT&CK matrix">🗺️ MITRE Mapping</button>
-          <button class="starter-chip" data-prompt="Show me all high and critical severity incidents in the workspace">📋 List High Incidents</button>
+          <button class="starter-chip" data-prompt="Analyze incident INC-8042: root cause, affected entities, and containment steps" data-col="triage">🚨 Triage INC-8042</button>
+          <button class="starter-chip" data-prompt="Search Sentinel data lake tables for authentication, process creation, and network events" data-col="data-exploration">🔍 Search Data Lake Tables</button>
+          <button class="starter-chip" data-prompt="Analyze user entity sarah.jenkins@contoso.com and show risk score and anomalies" data-col="data-exploration">👤 Analyze User Sarah</button>
+          <button class="starter-chip" data-prompt="Create an agent that generates a comprehensive post-incident report from Defender, Purview, and Sentinel" data-col="security-copilot-agent-creation">🤖 Create Copilot Reporter Agent</button>
+          <button class="starter-chip" data-prompt="Get Defender machine telemetry for SRV-FIN-SQL01 and check isolation status" data-col="triage">💻 Defender Machine Telemetry</button>
+          <button class="starter-chip" data-prompt="Create an agent that monitors ransomware alerts and auto-isolates infected machines" data-col="security-copilot-agent-creation">🛡️ Build Ransomware Agent</button>
         </div>
       </div>
 
       <!-- Active Investigation & Analysis Container -->
       <div class="analysis-results-card" id="analysis-results-card">
         
-        <!-- Incident Headline Banner -->
+        <!-- Headline Banner -->
         <div class="incident-banner" id="incident-banner">
           <div class="banner-main">
             <div class="banner-top-meta">
               <span class="incident-id-badge" id="banner-id">INC-8042</span>
               <span class="severity-badge sev-critical" id="banner-severity">CRITICAL</span>
               <span class="status-badge" id="banner-status">ACTIVE</span>
-              <span class="timestamp-meta" id="banner-time">Detected 4 hours ago</span>
+              <span class="collection-origin-badge" id="banner-collection">COLLECTION: TRIAGE</span>
             </div>
             <h2 class="incident-headline" id="banner-title">Multi-Stage Ransomware Attack & Shadow Copy Deletion on SQL Database</h2>
-            <div class="incident-tactics-row" id="banner-tactics">
-              <!-- Rendered tactics tags -->
-            </div>
+            <div class="incident-tactics-row" id="banner-tactics"></div>
           </div>
 
           <!-- Risk Gauges -->
@@ -170,14 +165,14 @@
           </div>
         </div>
 
-        <!-- MCP Tool Call Notification Banner (Shows dynamically when MCP tools are called) -->
+        <!-- MCP Tool Call Notification Banner -->
         <div class="mcp-tool-call-banner" id="mcp-tool-banner">
           <span class="mcp-icon">⚡</span>
-          <span class="mcp-text" id="mcp-tool-banner-text">Sentinel MCP Server executed: <code>analyze_incident</code>, <code>get_incident_entities</code>, <code>get_incident_alerts</code></span>
+          <span class="mcp-text" id="mcp-tool-banner-text">Sentinel MCP Server executed: <code>analyze_incident</code>, <code>get_incident_entities</code></span>
           <button class="btn-text-action" id="btn-view-wire">View Wire Protocol</button>
         </div>
 
-        <!-- Navigation Tabs for Analysis View -->
+        <!-- Navigation Tabs -->
         <nav class="analysis-tabs">
           <button class="tab-btn active" data-tab="tab-narrative">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
@@ -195,9 +190,17 @@
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             <span>Correlated Alerts (<span id="tab-alerts-count">4</span>)</span>
           </button>
+          <button class="tab-btn" data-tab="tab-data-exploration">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <span>Data Lake Tables</span>
+          </button>
+          <button class="tab-btn" data-tab="tab-copilot-agent">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <span>Security Copilot Agents</span>
+          </button>
           <button class="tab-btn" data-tab="tab-kql">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-            <span>KQL Query Runner</span>
+            <span>KQL Lake Query</span>
           </button>
           <button class="tab-btn" data-tab="tab-playbooks">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
@@ -205,7 +208,7 @@
           </button>
         </nav>
 
-        <!-- TAB CONTENT 1: Executive & Technical Triage Narrative -->
+        <!-- TAB CONTENT 1: Executive Narrative -->
         <div class="tab-pane active" id="tab-narrative">
           <div class="threat-verdict-box" id="threat-verdict-box">
             <div class="verdict-icon">⚠️</div>
@@ -214,18 +217,15 @@
               <p id="verdict-summary">Adversary achieved execution on financial database tier. Host isolation and credential revocation recommended immediately.</p>
             </div>
           </div>
-
-          <div class="narrative-markdown-content" id="narrative-content">
-            <!-- Dynamically populated -->
-          </div>
+          <div class="narrative-markdown-content" id="narrative-content"></div>
         </div>
 
-        <!-- TAB CONTENT 2: Entities & Indicators of Compromise -->
+        <!-- TAB CONTENT 2: Entities & IoCs -->
         <div class="tab-pane" id="tab-entities">
           <div class="entities-table-card">
             <div class="card-action-bar">
               <h4>Correlated Threat Entities</h4>
-              <span class="subtext">Identified by Microsoft Sentinel Entity Analytics</span>
+              <span class="subtext">Identified by Microsoft Sentinel & Defender XDR</span>
             </div>
             <div class="table-responsive">
               <table class="cyber-table">
@@ -238,35 +238,88 @@
                     <th>SOAR Action</th>
                   </tr>
                 </thead>
-                <tbody id="entities-table-body">
-                  <!-- Rendered dynamically -->
-                </tbody>
+                <tbody id="entities-table-body"></tbody>
               </table>
             </div>
           </div>
         </div>
 
-        <!-- TAB CONTENT 3: Kill Chain Attack Timeline -->
+        <!-- TAB CONTENT 3: Kill Chain Timeline -->
         <div class="tab-pane" id="tab-timeline">
-          <div class="timeline-container" id="timeline-container">
-            <!-- Rendered dynamically -->
-          </div>
+          <div class="timeline-container" id="timeline-container"></div>
         </div>
 
-        <!-- TAB CONTENT 4: Correlated Sentinel Alerts -->
+        <!-- TAB CONTENT 4: Alerts -->
         <div class="tab-pane" id="tab-alerts">
-          <div class="alerts-feed" id="alerts-feed-container">
-            <!-- Rendered dynamically -->
+          <div class="alerts-feed" id="alerts-feed-container"></div>
+        </div>
+
+        <!-- TAB CONTENT 5: Data Lake Tables (Data exploration Collection) -->
+        <div class="tab-pane" id="tab-data-exploration">
+          <div class="data-exploration-view">
+            <div class="de-header">
+              <div class="de-title-group">
+                <span class="mcp-collection-pill">Collection: Data exploration</span>
+                <h4>Sentinel Data Lake Semantic Table Catalog</h4>
+                <p class="subtext">Endpoint: <code>https://sentinel.microsoft.com/mcp/data-exploration</code></p>
+              </div>
+              <div class="de-search-bar">
+                <input type="text" id="de-table-search-input" placeholder="Search tables (e.g. process, signin, alert)..." class="form-control">
+                <button class="btn btn-primary btn-sm" id="btn-search-tables">Search Tables via MCP</button>
+              </div>
+            </div>
+            <div class="tables-grid" id="data-lake-tables-container">
+              <!-- Rendered dynamically -->
+            </div>
           </div>
         </div>
 
-        <!-- TAB CONTENT 5: KQL Query Console -->
+        <!-- TAB CONTENT 6: Security Copilot Agent Builder (Agent creation Collection) -->
+        <div class="tab-pane" id="tab-copilot-agent">
+          <div class="agent-builder-view">
+            <div class="agent-builder-header">
+              <span class="mcp-collection-pill">Collection: Security Copilot agent creation</span>
+              <h4>NL2Agent: Microsoft Security Copilot Agent Builder</h4>
+              <p class="subtext">Endpoint: <code>https://sentinel.microsoft.com/mcp/security-copilot-agent-creation</code></p>
+            </div>
+
+            <!-- Agent Creator Form -->
+            <div class="agent-creator-card">
+              <div class="form-row">
+                <div class="form-group" style="flex:1;">
+                  <label>Agent Name</label>
+                  <input type="text" id="new-agent-name" class="form-control" placeholder="e.g. Post-Incident-Reporter" value="Post-Incident-Reporter">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Workflow Description (Natural Language Prompt)</label>
+                <textarea id="new-agent-prompt" class="form-control" rows="3">Create an agent that generates a comprehensive post-incident report from Microsoft Defender, Microsoft Purview, and Microsoft Sentinel incidents; aggregates incident summaries, detailed insights, entities, and alerts; and provides actionable remediation steps.</textarea>
+              </div>
+              <div class="agent-actions">
+                <button class="btn btn-cyber" id="btn-create-copilot-agent">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                  <span>Generate Agent via create_security_copilot_agent</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Active / Published Agents List -->
+            <div class="published-agents-section">
+              <h4 style="margin: 18px 0 10px 0;">Configured Security Copilot Agents</h4>
+              <div class="copilot-agents-grid" id="copilot-agents-container">
+                <!-- Rendered dynamically -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB CONTENT 7: KQL Lake Query -->
         <div class="tab-pane" id="tab-kql">
           <div class="kql-console-card">
             <div class="kql-header">
               <div class="kql-title">
-                <span class="kql-pill">KQL</span>
-                <h4>Sentinel Log Analytics Query Runner</h4>
+                <span class="kql-pill">query_lake</span>
+                <h4>Sentinel Data Lake Query Runner</h4>
               </div>
               <div class="kql-presets">
                 <select id="kql-preset-selector">
@@ -281,7 +334,7 @@
             <div class="kql-actions">
               <button class="btn btn-cyber" id="btn-execute-kql">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                <span>Execute via MCP run_kql_query</span>
+                <span>Execute via MCP query_lake</span>
               </button>
             </div>
             <div class="kql-results-container" id="kql-results-container">
@@ -290,16 +343,14 @@
           </div>
         </div>
 
-        <!-- TAB CONTENT 6: SOAR Response Playbooks -->
+        <!-- TAB CONTENT 8: SOAR Response Playbooks -->
         <div class="tab-pane" id="tab-playbooks">
           <div class="playbooks-container">
             <div class="playbooks-intro">
               <h4>Automated Containment & SOAR Playbooks</h4>
               <p>Execute remediation actions directly via Sentinel MCP tool <code>trigger_playbook</code>.</p>
             </div>
-            <div class="playbook-grid" id="playbook-grid">
-              <!-- Rendered dynamically -->
-            </div>
+            <div class="playbook-grid" id="playbook-grid"></div>
           </div>
         </div>
 
@@ -315,7 +366,7 @@
         </button>
         <button class="subtab-btn" data-subtab="subtab-tools">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
-          <span>MCP Tools (9)</span>
+          <span>Tools Catalog (<span id="tools-badge-count">22</span>)</span>
         </button>
       </div>
 
@@ -330,16 +381,20 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
           </button>
         </div>
-        <div class="wire-terminal" id="wire-terminal">
-          <!-- Populated in real-time -->
-        </div>
+        <div class="wire-terminal" id="wire-terminal"></div>
       </div>
 
-      <!-- SUBTAB 2: Exposed MCP Tools -->
+      <!-- SUBTAB 2: Exposed MCP Tools Grouped by Collection -->
       <div class="subtab-pane" id="subtab-tools">
-        <div class="tools-list" id="tools-list-container">
-          <!-- Populated from GET /api/mcp/tools -->
+        <div class="tools-filter-bar">
+          <select id="tools-collection-filter" class="form-control" style="font-size:0.75rem;padding:4px 8px;">
+            <option value="all">All Collections (22 tools)</option>
+            <option value="triage">Triage (11 tools)</option>
+            <option value="data-exploration">Data exploration (6 tools)</option>
+            <option value="security-copilot-agent-creation">Agent creation (5 tools)</option>
+          </select>
         </div>
+        <div class="tools-list" id="tools-list-container"></div>
       </div>
     </aside>
 
@@ -370,16 +425,8 @@
           <input type="text" id="config-rg" class="form-control" value="rg-sentinel-prod">
         </div>
         <div class="form-group">
-          <label>Azure Subscription ID (Optional for Live Mode)</label>
+          <label>Azure Subscription ID</label>
           <input type="text" id="config-sub" class="form-control" placeholder="00000000-0000-0000-0000-000000000000">
-        </div>
-        <div class="form-group">
-          <label>Azure Tenant ID (Optional for Live Mode)</label>
-          <input type="text" id="config-tenant" class="form-control" placeholder="00000000-0000-0000-0000-000000000000">
-        </div>
-        <div class="form-group">
-          <label>Azure Client ID / App ID</label>
-          <input type="text" id="config-client" class="form-control" placeholder="App Registration Client ID">
         </div>
       </div>
       <div class="modal-footer">
@@ -389,7 +436,6 @@
     </div>
   </div>
 
-  <!-- Notification Toast Container -->
   <div class="toast-container" id="toast-container"></div>
 
   <script src="/app.js"></script>
