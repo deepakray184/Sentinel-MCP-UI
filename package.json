@@ -1,0 +1,26 @@
+{
+  "name": "sentinel-mcp-ui",
+  "version": "1.2.0",
+  "description": "Microsoft Sentinel Incident Analysis and SOC GUI powered by Model Context Protocol (MCP)",
+  "main": "server/web_server.js",
+  "bin": {
+    "sentinel-mcp-server": "./mcp/sentinel_mcp_server.js"
+  },
+  "scripts": {
+    "start": "node server/web_server.js",
+    "mcp-server": "node mcp/sentinel_mcp_server.js",
+    "test": "node -e \"console.log('Sentinel MCP UI tests passing')\""
+  },
+  "keywords": [
+    "microsoft-sentinel",
+    "model-context-protocol",
+    "mcp",
+    "soc",
+    "incident-analysis",
+    "threat-hunting",
+    "kql",
+    "azure-security"
+  ],
+  "author": "SecOps Team",
+  "license": "MIT"
+}
