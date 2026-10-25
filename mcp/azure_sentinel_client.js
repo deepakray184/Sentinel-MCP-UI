@@ -1,5 +1,5 @@
-// Azure Sentinel Live API Client
-// Connects to Azure Resource Manager REST API for Microsoft Sentinel & Log Analytics
+// Azure Sentinel & Microsoft Defender XDR Live API Client
+// Connects to Azure Resource Manager (ARM), Log Analytics Data Lake, and Defender XDR REST APIs
 
 const https = require('https');
 
@@ -11,8 +11,12 @@ class AzureSentinelClient {
     this.subscriptionId = config.subscriptionId || process.env.AZURE_SUBSCRIPTION_ID || '';
     this.resourceGroup = config.resourceGroup || process.env.AZURE_RESOURCE_GROUP || '';
     this.workspaceName = config.workspaceName || process.env.AZURE_WORKSPACE_NAME || '';
-    this.accessToken = null;
-    this.tokenExpiresAt = 0;
+    
+    // Tokens cache by scope
+    this.tokens = {
+      arm: { token: null, expiresAt: 0 },
+      graph: { token: null, expiresAt: 0 }
+    };
   }
 
   isConfigured() {
@@ -26,20 +30,21 @@ class AzureSentinelClient {
     );
   }
 
-  async getAccessToken() {
-    if (this.accessToken && Date.now() < this.tokenExpiresAt - 60000) {
-      return this.accessToken;
+  async getAccessToken(scope = 'https://management.azure.com/.default') {
+    const key = scope.includes('graph') ? 'graph' : 'arm';
+    if (this.tokens[key].token && Date.now() < this.tokens[key].expiresAt - 60000) {
+      return this.tokens[key].token;
     }
 
     if (!this.tenantId || !this.clientId || !this.clientSecret) {
-      throw new Error('Azure credentials not fully configured (Tenant ID, Client ID, Client Secret required).');
+      throw new Error('Azure credentials not fully configured (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET required).');
     }
 
     const postData = new URLSearchParams({
       grant_type: 'client_credentials',
       client_id: this.clientId,
       client_secret: this.clientSecret,
-      scope: 'https://management.azure.com/.default'
+      scope: scope
     }).toString();
 
     const options = {
@@ -61,9 +66,9 @@ class AzureSentinelClient {
           try {
             const data = JSON.parse(body);
             if (data.access_token) {
-              this.accessToken = data.access_token;
-              this.tokenExpiresAt = Date.now() + (data.expires_in * 1000);
-              resolve(this.accessToken);
+              this.tokens[key].token = data.access_token;
+              this.tokens[key].expiresAt = Date.now() + (data.expires_in * 1000);
+              resolve(this.tokens[key].token);
             } else {
               reject(new Error(`Azure OAuth failed: ${data.error_description || body}`));
             }
@@ -80,7 +85,7 @@ class AzureSentinelClient {
   }
 
   async queryArm(endpoint, method = 'GET', bodyData = null) {
-    const token = await this.getAccessToken();
+    const token = await this.getAccessToken('https://management.azure.com/.default');
     const options = {
       hostname: 'management.azure.com',
       port: 443,
@@ -118,6 +123,7 @@ class AzureSentinelClient {
     });
   }
 
+  // Microsoft Sentinel Incident APIs
   async listIncidents(filter = '') {
     const apiVersion = '2023-11-01-preview';
     let path = `/subscriptions/${this.subscriptionId}/resourceGroups/${this.resourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${this.workspaceName}/providers/Microsoft.SecurityInsights/incidents?api-version=${apiVersion}`;
@@ -145,9 +151,9 @@ class AzureSentinelClient {
     return this.queryArm(path, 'POST');
   }
 
+  // Microsoft Sentinel Log Analytics KQL API
   async executeKql(query, timespan = 'P1D') {
-    // Log Analytics Query API
-    const token = await this.getAccessToken();
+    const token = await this.getAccessToken('https://management.azure.com/.default');
     const bodyData = JSON.stringify({ query, timespan });
     const options = {
       hostname: 'api.loganalytics.io',
@@ -177,6 +183,51 @@ class AzureSentinelClient {
       req.write(bodyData);
       req.end();
     });
+  }
+
+  // Microsoft Defender XDR API (via Microsoft Graph Security)
+  async queryDefenderGraph(endpoint, method = 'GET', bodyData = null) {
+    const token = await this.getAccessToken('https://graph.microsoft.com/.default');
+    const options = {
+      hostname: 'graph.microsoft.com',
+      port: 443,
+      path: `/v1.0/${endpoint.replace(/^\//, '')}`,
+      method: method,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    };
+
+    return new Promise((resolve, reject) => {
+      const req = https.request(options, (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(body);
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(json);
+            } else {
+              reject(new Error(json.error ? json.error.message : `Defender Graph Error ${res.statusCode}: ${body}`));
+            }
+          } catch (e) {
+            reject(new Error(`Defender Graph parse error: ${e.message}`));
+          }
+        });
+      });
+      req.on('error', (err) => reject(err));
+      if (bodyData) req.write(JSON.stringify(bodyData));
+      req.end();
+    });
+  }
+
+  async getDefenderAlerts() {
+    return this.queryDefenderGraph('security/alerts_v2?$top=10');
+  }
+
+  async getDefenderIncidents() {
+    return this.queryDefenderGraph('security/incidents?$top=10');
   }
 }
 
