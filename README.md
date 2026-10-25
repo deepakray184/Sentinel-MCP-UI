@@ -222,6 +222,16 @@ Navigate to **`http://localhost:3333`** in your browser.
 
 ---
 
+## 🤖 Using as Microsoft Security Copilot
+
+You can use this application **directly as an autonomous Security Copilot** for incident analysis, or import it into the official **Microsoft Security Copilot** portal (`securitycopilot.microsoft.com`):
+
+* **Standalone Copilot Experience**: Enter plain English security prompts in the UI prompt bar to summarize incidents, triage root causes, investigate compromised users, run KQL hunts, and trigger containment playbooks.
+* **Official Microsoft Security Copilot Plugin**: Import [`copilot/manifest.yaml`](./copilot/manifest.yaml) directly into the Microsoft Security Copilot plugin catalog.
+* **Full Guide**: See [`copilot/SECURITY_COPILOT_USAGE.md`](./copilot/SECURITY_COPILOT_USAGE.md) for side-by-side workflow comparisons and prompt templates.
+
+---
+
 ## 🔌 Using Local Server with Claude Desktop / Antigravity / Cursor
 
 Add the Sentinel MCP Server to your `claude_desktop_config.json`:

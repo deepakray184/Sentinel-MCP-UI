@@ -1,0 +1,45 @@
+# Microsoft Security Copilot Custom Plugin Manifest
+# Import this into Microsoft Security Copilot (securitycopilot.microsoft.com) -> Settings -> Custom Plugins
+
+Descriptor:
+  Name: SentinelMCPHub
+  DisplayName: Microsoft Sentinel & Defender XDR MCP Hub
+  Description: Natural language incident triage, kill-chain timeline reconstruction, entity forensics, and automated SOAR containment playbooks powered by the Microsoft Sentinel MCP Server.
+  DescriptionForModel: Use this plugin when the user asks to analyze, triage, or investigate Microsoft Sentinel incidents, Defender XDR alerts, KQL logs, or compromised identities and endpoints.
+  Icon: https://raw.githubusercontent.com/deepakray184/Sentinel-MCP-UI/main/public/favicon.ico
+
+SupportedAuthTypes:
+  - None # For local / internal gateway
+  - OAuth2ClientCredentials
+
+SkillGroups:
+  - Format: MCP
+    Settings:
+      Endpoint: http://localhost:3333/api/mcp
+      Collections:
+        - id: triage
+          url: https://sentinel.microsoft.com/mcp/triage
+        - id: data-exploration
+          url: https://sentinel.microsoft.com/mcp/data-exploration
+        - id: security-copilot-agent-creation
+          url: https://sentinel.microsoft.com/mcp/security-copilot-agent-creation
+
+Skills:
+  - Name: ListIncidents
+    DisplayName: List Sentinel Incidents
+    Description: Retrieve active security incidents filtered by severity or status.
+  - Name: GetIncidentById
+    DisplayName: Get Incident Details
+    Description: Get full metadata, risk scores, and attack vectors for an incident.
+  - Name: analyze_incident
+    DisplayName: Autonomous Incident Triage
+    Description: Perform deep root cause, blast radius, and MITRE ATT&CK correlation.
+  - Name: query_lake
+    DisplayName: KQL Lake Query
+    Description: Run Kusto queries against Sentinel data lake tables.
+  - Name: trigger_playbook
+    DisplayName: Containment SOAR Playbook
+    Description: Execute endpoint isolation, token revocation, and IP blocks.
+  - Name: create_security_copilot_agent
+    DisplayName: Create Security Copilot Agent
+    Description: Generate and deploy custom agents from natural language prompts.
